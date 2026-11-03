@@ -165,7 +165,7 @@ export const EnrolledCoursesPage = () => {
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Enrolled Notes
+              Enrolled Course
             </p>
             <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">{stats.totalCourses}</h3>
           </div>
@@ -192,20 +192,6 @@ export const EnrolledCoursesPage = () => {
               Subjects Covered
             </p>
             <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">{stats.totalSubjects}</h3>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 flex items-center gap-3 shadow-xs">
-          <div className="p-2 sm:p-2.5 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60 shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Access Permission
-            </p>
-            <h3 className="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              <span>Full Unlocked</span>
-            </h3>
           </div>
         </div>
       </div>

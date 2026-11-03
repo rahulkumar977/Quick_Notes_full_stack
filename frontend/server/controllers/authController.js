@@ -721,6 +721,91 @@ const updateProfile = async (req, res) => {
   }
 };
 
+const getAllUsersAdmin = async (req, res) => {
+  try {
+    const { search, q, role, status } = req.query;
+    const filter = {};
+
+    if (role) {
+      filter.role = role.toUpperCase();
+    } else {
+      filter.role = 'STUDENT';
+    }
+
+    if (status) {
+      if (status === 'active') filter.isActive = true;
+      if (status === 'suspended') filter.isActive = false;
+    }
+
+    const searchTerm = search || q;
+    if (searchTerm && searchTerm.trim()) {
+      const sanitized = searchTerm.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.$or = [
+        { name: { $regex: sanitized, $options: 'i' } },
+        { email: { $regex: sanitized, $options: 'i' } },
+        { 'academicProfile.courseName': { $regex: sanitized, $options: 'i' } }
+      ];
+    }
+
+    const users = await User.find(filter)
+      .select('name email role academicProfile isVerified isActive createdAt lastLogin')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+  } catch (error) {
+    console.error('Error fetching admin users:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch users'
+    });
+  }
+};
+
+const updateUserStatusAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (typeof isActive === 'boolean') {
+      user.isActive = isActive;
+    } else {
+      user.isActive = !user.isActive;
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `User ${user.isActive ? 'activated' : 'suspended'} successfully`,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isActive: user.isActive
+      }
+    });
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update user status'
+    });
+  }
+};
+
 module.exports = {
   signup,
   verifySignupOTP,
@@ -734,5 +819,7 @@ module.exports = {
   changePassword,
   refreshAccessToken,
   getMe,
-  updateProfile
+  updateProfile,
+  getAllUsersAdmin,
+  updateUserStatusAdmin
 };

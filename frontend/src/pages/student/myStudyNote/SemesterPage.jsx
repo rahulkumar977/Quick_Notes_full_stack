@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Breadcrumb } from '../../../components/common/Breadcrumb';
 import { PdfView } from '../../../components/common/PdfView';
 import {
   fetchMyCourses,
+  fetchAllCourses,
   fetchSemestersByCourse,
   fetchSubjectsBySemester,
   setSelectedCourse,
@@ -29,55 +30,104 @@ export const SemesterPage = () => {
   const { semesterId: pathSemesterId, subjectId: pathSubjectId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
 
-  // Support query params (?semester=1&subject=math) as well as route params (:semesterId, :subjectId)
+  // Support query params (?course=btech&semester=1&subject=math) as well as route params (:semesterId, :subjectId)
+  const courseParam = searchParams.get('course');
   const semesterParam = searchParams.get('semester') || pathSemesterId;
   const subjectParam = searchParams.get('subject') || pathSubjectId;
 
   // Read academic state from courseSlice
   const {
     myCourses,
+    allCourses,
     selectedCourse,
     semesters,
+    semestersByCourse,
     subjectsBySemester,
     loading: courseLoading
   } = useSelector((state) => state.course);
 
   const [notes, setNotes] = useState([]);
   const [notesLoading, setNotesLoading] = useState(false);
-  const [selectedPdfNote, setSelectedPdfNote] = useState(null);
+  const [selectedPdfNote, setSelectedPdfNote] = useState(location.state?.note || null);
   const [updatingVisibilityId, setUpdatingVisibilityId] = useState(null);
+
+  // Auto-open PDF modal if navigated from Dashboard or another page with note in location.state
+  useEffect(() => {
+    if (location.state?.note) {
+      setSelectedPdfNote(location.state.note);
+    } else if (location.state?.noteId && notes.length > 0) {
+      const found = notes.find((n) => (n._id || n.id) === location.state.noteId);
+      if (found) setSelectedPdfNote(found);
+    }
+  }, [location.state, notes]);
 
   // 1. Ensure courses are loaded in Redux
   useEffect(() => {
     if (!myCourses || myCourses.length === 0) {
       dispatch(fetchMyCourses());
     }
-  }, [dispatch, myCourses?.length]);
-
-  // 2. Ensure an active course is selected
-  useEffect(() => {
-    if (myCourses?.length > 0 && !selectedCourse) {
-      dispatch(setSelectedCourse(myCourses[0]));
+    if (!allCourses || allCourses.length === 0) {
+      dispatch(fetchAllCourses());
     }
-  }, [myCourses, selectedCourse, dispatch]);
+  }, [dispatch, myCourses?.length, allCourses?.length]);
 
-  // 3. Ensure semesters for the selected course are loaded
+  // Combined available courses
+  const availableCourses = useMemo(() => {
+    const myMap = new Map((myCourses || []).map((c) => [c._id, c]));
+    const list = [...(myCourses || [])];
+    (allCourses || []).forEach((c) => {
+      if (c && c._id && !myMap.has(c._id) && c.isActive !== false) {
+        list.push(c);
+      }
+    });
+    return list;
+  }, [myCourses, allCourses]);
+
+  // 2. Ensure an active course is selected or matched from courseParam
   useEffect(() => {
-    if (selectedCourse?._id && semesters.length === 0) {
-      dispatch(fetchSemestersByCourse(selectedCourse._id));
+    if (availableCourses.length > 0) {
+      if (courseParam) {
+        const cleanCourse = decodeURIComponent(String(courseParam)).trim().toLowerCase();
+        const cleanCourseNorm = cleanCourse.replace(/[-_\s]+/g, '');
+        const matched = availableCourses.find(
+          (c) =>
+            c._id === courseParam ||
+            (c.slug && (c.slug.toLowerCase() === cleanCourse || c.slug.toLowerCase().replace(/[-_\s]+/g, '') === cleanCourseNorm)) ||
+            (c.name && (c.name.toLowerCase() === cleanCourse || c.name.toLowerCase().replace(/[-_\s]+/g, '') === cleanCourseNorm))
+        );
+        if (matched && (!selectedCourse || selectedCourse._id !== matched._id)) {
+          dispatch(setSelectedCourse(matched));
+          return;
+        }
+      }
+      if (!selectedCourse) {
+        dispatch(setSelectedCourse(availableCourses[0]));
+      }
     }
-  }, [selectedCourse?._id, semesters.length, dispatch]);
+  }, [availableCourses, courseParam, selectedCourse, dispatch]);
+
+  // 3. Ensure semesters for the selected course are loaded (cached check)
+  useEffect(() => {
+    if (selectedCourse?._id && (!semesters || semesters.length === 0)) {
+      if (!semestersByCourse?.[selectedCourse._id]) {
+        dispatch(fetchSemestersByCourse(selectedCourse._id));
+      }
+    }
+  }, [selectedCourse?._id, semesters?.length, semestersByCourse, dispatch]);
 
   // 4. Resolve current semester from Redux semesters list (supports semesterNumber, _id, or name)
   const currentSemester = useMemo(() => {
     if (!semesters || semesters.length === 0 || !semesterParam) return null;
     const cleanParam = decodeURIComponent(String(semesterParam)).trim().toLowerCase();
+    const cleanParamNorm = cleanParam.replace(/[-_\s]+/g, '');
     return (
       semesters.find((s) => String(s.semesterNumber) === cleanParam) ||
       semesters.find((s) => s._id === semesterParam) ||
       semesters.find((s) => s.name?.toLowerCase() === cleanParam) ||
+      semesters.find((s) => s.name?.toLowerCase().replace(/[-_\s]+/g, '') === cleanParamNorm) ||
       null
     );
   }, [semesters, semesterParam]);
@@ -274,7 +324,17 @@ export const SemesterPage = () => {
 
   const navigateToAllSubjects = () => {
     const semNum = currentSemester?.semesterNumber || semesterParam || 1;
-    navigate(`/student/my-study/semester?semester=${semNum}`);
+    const cParam = selectedCourse?.slug || selectedCourse?.name || courseParam || '';
+    navigate(
+      cParam
+        ? `/student/my-study/semester?course=${encodeURIComponent(cParam)}&semester=${semNum}`
+        : `/student/my-study/semester?semester=${semNum}`
+    );
+  };
+
+  const backToMyStudy = () => {
+    const cParam = selectedCourse?.slug || selectedCourse?.name || courseParam || '';
+    navigate(cParam ? `/student/my-study?course=${encodeURIComponent(cParam)}` : '/student/my-study');
   };
 
   return (
@@ -282,7 +342,7 @@ export const SemesterPage = () => {
       {/* Breadcrumb Navigation */}
       <Breadcrumb
         items={[
-          { label: 'My Study', onClick: () => navigate('/student/my-study') },
+          { label: 'My Study', onClick: backToMyStudy },
           {
             label: semesterDisplayName,
             onClick: subjectParam ? navigateToAllSubjects : undefined
@@ -319,7 +379,7 @@ export const SemesterPage = () => {
             </button>
           ) : (
             <button
-              onClick={() => navigate('/student/my-study')}
+              onClick={backToMyStudy}
               className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"
             >
               <ArrowLeft className="w-3.5 h-3.5" />

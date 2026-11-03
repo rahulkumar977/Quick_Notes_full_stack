@@ -23,8 +23,8 @@ export const LoginPage = () => {
   const { isLoading } = useSelector((state) => state.auth);
 
   const [formData, setFormData] = useState({
-    email: 'kumarrahulhzb799@gmail.com',
-    password: '1@Rahul1@',
+    email: '',
+    password: '',
   });
 
   const [showPassword, setShowPassword] = useState(false);

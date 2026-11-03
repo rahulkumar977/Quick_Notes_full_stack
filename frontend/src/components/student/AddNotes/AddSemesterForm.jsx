@@ -26,6 +26,13 @@ export const AddSemesterForm = () => {
     (state) => state.course
   );
 
+  // Check if selected course is Placement Preparation (case-insensitive)
+  const isPlacementCourse = Boolean(
+    (selectedCourse?.name && /placement/i.test(selectedCourse.name)) ||
+    (selectedCourse?.slug && /placement/i.test(selectedCourse.slug)) ||
+    (selectedCourse?.courseCode && /placement/i.test(selectedCourse.courseCode))
+  );
+
   // Active semesters under currently selected course, sorted by semesterNumber
   const activeSemesters = (semesters || [])
     .filter((s) => s && s.isActive !== false)
@@ -36,10 +43,10 @@ export const AddSemesterForm = () => {
   const [submitting, setSubmitting] = useState(false);
   const [selectedSemesterId, setSelectedSemesterId] = useState(selectedSemester?._id || '');
 
-  // Form data for creating a new semester
+  // Form data for creating a new semester or placement module
   const [formData, setFormData] = useState({
     semesterNumber: selectedSemester?.semesterNumber || 1,
-    name: selectedSemester?.name || 'Semester 1',
+    name: selectedSemester?.name || (isPlacementCourse ? '' : 'Semester 1'),
   });
 
   const isMountedRef = useRef(true);
@@ -84,11 +91,12 @@ export const AddSemesterForm = () => {
   const handleSwitchToCreate = () => {
     setMode('create');
     const existingNums = activeSemesters.map((s) => s.semesterNumber || 0);
-    const maxNum = existingNums.length > 0 ? Math.max(...existingNums) : 0;
-    const nextNum = Math.min(Math.max(maxNum + 1, 1), 12);
+    const nextNum =
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].find((n) => !existingNums.includes(n)) ||
+      Math.min(Math.max(Math.max(...existingNums, 0) + 1, 1), 12);
     setFormData({
       semesterNumber: nextNum,
-      name: `Semester ${nextNum}`,
+      name: isPlacementCourse ? '' : `Semester ${nextNum}`,
     });
   };
 
@@ -115,13 +123,17 @@ export const AddSemesterForm = () => {
     }
 
     if (!selectedSemesterId) {
-      toast.error('Please choose a semester to continue');
+      toast.error(
+        isPlacementCourse
+          ? 'Please choose a track or module to continue'
+          : 'Please choose a semester to continue'
+      );
       return;
     }
 
     const sem = activeSemesters.find((s) => s._id === selectedSemesterId);
     if (!sem) {
-      toast.error('Selected semester not found');
+      toast.error(isPlacementCourse ? 'Selected track not found' : 'Selected semester not found');
       return;
     }
 
@@ -130,7 +142,7 @@ export const AddSemesterForm = () => {
     toast.success(`Selected "${sem.name}"`);
   };
 
-  // Action 2: Create New Semester (Submits only fields supported by backend schema)
+  // Action 2: Create New Semester / Placement Track
   const handleCreateSemester = async (e) => {
     e.preventDefault();
 
@@ -140,35 +152,74 @@ export const AddSemesterForm = () => {
       return;
     }
 
-    const num = Number(formData.semesterNumber);
-    if (!num || num < 1 || num > 12) {
-      toast.error('Semester number must be between 1 and 12');
+    const trimmedName = formData.name?.trim() || '';
+
+    // If placement course, name in characters is required
+    if (isPlacementCourse && !trimmedName) {
+      toast.error('Please enter a module or track name (e.g. DSA, Aptitude)');
       return;
     }
 
-    // Check if this semester number already exists in this course
-    const existingSameNumber = activeSemesters.find((s) => s.semesterNumber === num);
-    if (existingSameNumber) {
-      // Prompt user to reuse existing
-      toast(`Semester ${num} already exists in this course. Reusing existing record.`, {
-        icon: 'ℹ️',
-      });
-      dispatch(setSelectedSemester(existingSameNumber));
-      dispatch(setCurrentStep(3));
-      return;
+    // Auto-resolve next available semesterNumber (1 to 12)
+    const existingNums = activeSemesters.map((s) => s.semesterNumber || 0);
+    const fallbackNum =
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].find((n) => !existingNums.includes(n)) ||
+      Math.min(Math.max((Math.max(...existingNums, 0)) + 1, 1), 12);
+
+    let num = Number(formData.semesterNumber);
+    if (!num || isNaN(num) || num < 1 || num > 12) {
+      num = fallbackNum;
+    }
+
+    // If matching by name already exists, reuse it
+    if (trimmedName) {
+      const existingSameName = activeSemesters.find(
+        (s) => s.name?.trim().toLowerCase() === trimmedName.toLowerCase()
+      );
+      if (existingSameName) {
+        toast(`"${existingSameName.name}" already exists. Selecting existing record.`, {
+          icon: 'ℹ️',
+        });
+        dispatch(setSelectedSemester(existingSameName));
+        dispatch(setCurrentStep(3));
+        return;
+      }
+    }
+
+    if (!isPlacementCourse) {
+      // Check if this semester number already exists in this course
+      const existingSameNumber = activeSemesters.find((s) => s.semesterNumber === num);
+      if (existingSameNumber) {
+        toast(`Semester ${num} already exists in this course. Reusing existing record.`, {
+          icon: 'ℹ️',
+        });
+        dispatch(setSelectedSemester(existingSameNumber));
+        dispatch(setCurrentStep(3));
+        return;
+      }
+    } else {
+      // For Placement Prep, avoid duplicate index collision
+      if (activeSemesters.some((s) => s.semesterNumber === num)) {
+        num = fallbackNum;
+      }
     }
 
     setSubmitting(true);
     try {
       const payload = {
         semesterNumber: num,
-        name: formData.name.trim() || `Semester ${num}`,
+        name: trimmedName || `Semester ${num}`,
       };
 
       const res = await academicApi.createSemester(selectedCourse._id, payload);
       if (res && res.success && res.data) {
         const returnedSemester = res.data;
-        toast.success(res.message || 'Semester saved successfully!');
+        toast.success(
+          res.message ||
+            (isPlacementCourse
+              ? `"${returnedSemester.name}" track added successfully!`
+              : 'Semester saved successfully!')
+        );
 
         // Update Redux state without duplicates
         dispatch(addSemester(returnedSemester));
@@ -218,10 +269,12 @@ export const AddSemesterForm = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
         <div>
           <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
-            Choose or Add Semester
+            {isPlacementCourse ? 'Choose or Add Placement Track' : 'Choose or Add Semester'}
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Specify the academic term or semester index for {selectedCourse.name}.
+            {isPlacementCourse
+              ? `Specify the preparation track, module, or topic for ${selectedCourse.name}.`
+              : `Specify the academic term or semester index for ${selectedCourse.name}.`}
           </p>
         </div>
 
@@ -251,7 +304,7 @@ export const AddSemesterForm = () => {
             }`}
           >
             <PlusCircle className="w-3.5 h-3.5" />
-            <span>+ Add New</span>
+            <span>{isPlacementCourse ? '+ Add Track / Module' : '+ Add New'}</span>
           </button>
         </div>
       </div>
@@ -263,14 +316,16 @@ export const AddSemesterForm = () => {
           {loading && activeSemesters.length === 0 ? (
             <div className="py-12 text-center space-y-3">
               <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)] mx-auto" />
-              <p className="text-xs text-slate-500 dark:text-slate-400">Loading semesters for {selectedCourse.name}...</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Loading {isPlacementCourse ? 'tracks' : 'semesters'} for {selectedCourse.name}...
+              </p>
             </div>
           ) : error && activeSemesters.length === 0 ? (
             /* Error & Retry State */
             <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 space-y-2 text-xs">
               <div className="flex items-center gap-2 font-bold">
                 <AlertCircle className="w-4 h-4" />
-                <span>Failed to load semesters</span>
+                <span>Failed to load {isPlacementCourse ? 'tracks' : 'semesters'}</span>
               </div>
               <p>{error}</p>
               <button
@@ -288,10 +343,14 @@ export const AddSemesterForm = () => {
               <Calendar className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  No semesters configured for this course yet
+                  {isPlacementCourse
+                    ? 'No tracks or modules configured for Placement Preparation yet'
+                    : 'No semesters configured for this course yet'}
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Add the first semester (e.g. Semester 1) to continue.
+                  {isPlacementCourse
+                    ? 'Add your first preparation track (e.g. DSA, Aptitude) to continue.'
+                    : 'Add the first semester (e.g. Semester 1) to continue.'}
                 </p>
               </div>
               <button
@@ -299,15 +358,15 @@ export const AddSemesterForm = () => {
                 onClick={handleSwitchToCreate}
                 className="px-4 py-2 text-xs font-semibold text-[var(--primary)] bg-[var(--primary-light)] dark:bg-indigo-950/60 dark:text-indigo-400 hover:bg-[var(--primary-border)]/50 rounded-lg transition-colors cursor-pointer"
               >
-                + Add Semester 1
+                {isPlacementCourse ? '+ Add Track / Module' : '+ Add Semester 1'}
               </button>
             </div>
           ) : (
-            /* Semester Cards Selection */
+            /* Semester / Track Cards Selection */
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Select Existing Semester ({activeSemesters.length})
+                  Select Existing {isPlacementCourse ? 'Track' : 'Semester'} ({activeSemesters.length})
                 </label>
                 <span className="text-[11px] text-slate-400 dark:text-slate-500">Click a card to select</span>
               </div>
@@ -330,7 +389,7 @@ export const AddSemesterForm = () => {
                           : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-[var(--primary)] dark:hover:border-[var(--primary)] hover:bg-slate-50 dark:hover:bg-slate-800/50'
                       }`}
                     >
-                      {/* Semester Name & Info */}
+                      {/* Semester / Track Name & Info */}
                       <div className="flex items-center justify-between">
                         <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 group-hover:text-[var(--primary)] transition-colors truncate">
                           {s.name || `Semester ${semNum}`}
@@ -344,7 +403,7 @@ export const AddSemesterForm = () => {
 
                       {/* Metadata / Counts */}
                       <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500">
-                        <span>{hasSubjectCount ? `${s.subjectCount} subjects` : 'Active Term'}</span>
+                        <span>{hasSubjectCount ? `${s.subjectCount} topics` : 'Active Track'}</span>
                         {hasNoteCount && <span>{s.noteCount} notes</span>}
                       </div>
                     </div>
@@ -376,48 +435,100 @@ export const AddSemesterForm = () => {
           </div>
         </form>
       ) : (
-        /* MODE 2: Add New Semester (Submits supported fields to actual backend) */
+        /* MODE 2: Add New Semester / Placement Track */
         <form onSubmit={handleCreateSemester} className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* Semester Number */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                Semester Number (1 - 12) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="number"
-                name="semesterNumber"
-                value={formData.semesterNumber}
-                onChange={handleSemesterNumberChange}
-                min={1}
-                max={12}
-                required
-                className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition-all"
-              />
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Identifies term index in the academic structure.
-              </p>
-            </div>
+          {isPlacementCourse ? (
+            /* Placement Preparation: Text/Character Input */
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Module / Track Name (Characters) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Data Structures & Algorithms, Aptitude & Reasoning, Web Dev, Core CS..."
+                  maxLength={100}
+                  required
+                  autoFocus
+                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition-all"
+                />
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Type your preparation module or topic name in characters (e.g. DSA, Technical, HR, Aptitude).
+                </p>
+              </div>
 
-            {/* Semester Display Name */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                Display Name
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="e.g. Semester 1, 1st Year Autumn..."
-                maxLength={100}
-                className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition-all"
-              />
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Optional custom label (defaults to "Semester {formData.semesterNumber || 1}").
-              </p>
+              {/* Quick suggestions pills for Placement Preparation */}
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Suggested Modules:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Data Structures & Algorithms (DSA)',
+                    'Aptitude & Reasoning',
+                    'Web Development',
+                    'Core CS Subjects',
+                    'System Design',
+                    'Mock Interviews'
+                  ].map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, name: suggestion }))}
+                      className="px-2.5 py-1 text-xs bg-slate-100 dark:bg-slate-800 hover:bg-[var(--primary-light)] hover:text-[var(--primary)] dark:hover:bg-indigo-950/60 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 rounded-md transition-colors cursor-pointer border border-transparent dark:border-slate-700 font-medium"
+                    >
+                      + {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Regular Course: Semester Number and Display Name */
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Semester Number */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Semester Number (1 - 12) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  name="semesterNumber"
+                  value={formData.semesterNumber}
+                  onChange={handleSemesterNumberChange}
+                  min={1}
+                  max={12}
+                  required
+                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition-all"
+                />
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Identifies term index in the academic structure.
+                </p>
+              </div>
+
+              {/* Semester Display Name */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Display Name
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Semester 1, 1st Year Autumn..."
+                  maxLength={100}
+                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20 focus:border-[var(--primary)] transition-all"
+                />
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Optional custom label (defaults to "Semester {formData.semesterNumber || 1}").
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Form Actions */}
           <div className="pt-4 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
@@ -432,17 +543,17 @@ export const AddSemesterForm = () => {
 
             <button
               type="submit"
-              disabled={submitting || !formData.semesterNumber}
+              disabled={submitting || (isPlacementCourse ? !formData.name?.trim() : !formData.semesterNumber)}
               className="px-6 py-2.5 text-sm font-semibold text-white bg-[var(--primary)] hover:bg-[var(--primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer inline-flex items-center gap-2 shadow-xs"
             >
               {submitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Saving Semester...</span>
+                  <span>{isPlacementCourse ? 'Saving Track...' : 'Saving Semester...'}</span>
                 </>
               ) : (
                 <>
-                  <span>Create Semester & Proceed</span>
+                  <span>{isPlacementCourse ? 'Save Track & Proceed' : 'Create Semester & Proceed'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

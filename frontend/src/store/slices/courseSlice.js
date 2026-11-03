@@ -58,7 +58,7 @@ export const fetchSubjectsForSemesters = createAsyncThunk(
       const state = getState().course;
       const cached = state.subjectsBySemester || {};
       const missingIds = (semesterIds || []).filter(
-        (id) => id && (!cached[id] || cached[id].length === 0 || cached[id][0]?.publicCount === undefined)
+        (id) => id && cached[id] === undefined
       );
 
       // If all are already in cache with updated counts, return existing without network calls
@@ -94,6 +94,7 @@ const initialState = {
   myCourses: [],
   allCourses: [],
   semesters: [],
+  semestersByCourse: {}, // Cached map of courseId -> semesters
   subjects: [],
   subjectsBySemester: {}, // Cached map of semesterId -> subjects
 
@@ -102,6 +103,7 @@ const initialState = {
   selectedSemester: null,
   selectedSubject: null,
   loading: false,
+  semestersLoading: false,
 
   // Stepper state (1: Course, 2: Semester, 3: Subject)
   currentStep: 1,
@@ -130,7 +132,11 @@ const courseSlice = createSlice({
         // Reset dependent selections if parent changes
         state.selectedSemester = null;
         state.selectedSubject = null;
-        state.semesters = [];
+        // Instantly populate semesters from cache if available for zero-lag switching
+        state.semesters =
+          course?._id && state.semestersByCourse[course._id]
+            ? state.semestersByCourse[course._id]
+            : [];
         state.subjects = [];
         state.isCompleted = false;
       }
@@ -168,6 +174,16 @@ const courseSlice = createSlice({
       const newSemester = action.payload;
       if (!newSemester?._id) return;
       state.semesters = [...state.semesters.filter((s) => s._id !== newSemester._id), newSemester];
+      const courseId =
+        typeof newSemester.course === 'object' && newSemester.course !== null
+          ? newSemester.course._id
+          : newSemester.course;
+      if (courseId && state.semestersByCourse[courseId]) {
+        state.semestersByCourse[courseId] = [
+          ...state.semestersByCourse[courseId].filter((s) => s._id !== newSemester._id),
+          newSemester
+        ].sort((a, b) => (a.semesterNumber || 0) - (b.semesterNumber || 0));
+      }
       state.selectedSemester = newSemester;
       state.selectedSubject = null;
       state.subjects = [];
@@ -242,18 +258,30 @@ const courseSlice = createSlice({
       })
 
       // fetchSemestersByCourse
-      .addCase(fetchSemestersByCourse.pending, (state) => {
-        state.loading = true;
+      .addCase(fetchSemestersByCourse.pending, (state, action) => {
+        const courseId = action.meta?.arg;
+        if (!courseId || !state.semestersByCourse[courseId]) {
+          state.semestersLoading = true;
+        }
         state.error = null;
       })
       .addCase(fetchSemestersByCourse.fulfilled, (state, action) => {
+        state.semestersLoading = false;
         state.loading = false;
         const list = action.payload || [];
-        state.semesters = [...list].sort(
+        const sortedList = [...list].sort(
           (a, b) => (a.semesterNumber || 0) - (b.semesterNumber || 0)
         );
+        const courseId = action.meta?.arg;
+        if (courseId) {
+          state.semestersByCourse[courseId] = sortedList;
+        }
+        if (!state.selectedCourse || !courseId || state.selectedCourse._id === courseId) {
+          state.semesters = sortedList;
+        }
       })
       .addCase(fetchSemestersByCourse.rejected, (state, action) => {
+        state.semestersLoading = false;
         state.loading = false;
         state.error = action.payload;
       })

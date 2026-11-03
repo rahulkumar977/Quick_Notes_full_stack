@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Breadcrumb } from '../../../components/common/Breadcrumb';
 import {
   fetchMyCourses,
+  fetchAllCourses,
   fetchSemestersByCourse,
   fetchSubjectsForSemesters,
   setSelectedCourse
@@ -19,6 +20,33 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+// Helper to reliably match course by ID, slug, name, or courseCode across case & dash/space formats
+const courseMatchesQuery = (course, query) => {
+  if (!course || !query) return false;
+  const cleanQ = decodeURIComponent(String(query)).trim().toLowerCase();
+  const qNorm = cleanQ.replace(/[-_\s]+/g, '');
+  if (!qNorm) return false;
+
+  if (course._id && String(course._id) === query) return true;
+
+  if (course.slug) {
+    const s = String(course.slug).toLowerCase();
+    if (s === cleanQ || s.replace(/[-_\s]+/g, '') === qNorm) return true;
+  }
+
+  if (course.name) {
+    const n = String(course.name).toLowerCase();
+    if (n === cleanQ || n.replace(/[-_\s]+/g, '') === qNorm) return true;
+  }
+
+  if (course.courseCode) {
+    const c = String(course.courseCode).toLowerCase();
+    if (c === cleanQ || c.replace(/[-_\s]+/g, '') === qNorm) return true;
+  }
+
+  return false;
+};
+
 export const MyStudyPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -29,100 +57,115 @@ export const MyStudyPage = () => {
   // Pure Redux state from courseSlice for maximum performance & caching
   const {
     myCourses,
+    allCourses,
     selectedCourse,
     semesters,
+    semestersByCourse,
     subjectsBySemester,
-    loading
+    loading,
+    semestersLoading
   } = useSelector((state) => state.course);
 
-  // 1. Fetch logged-in student's courses via courseSlice thunk if not already cached
+  // 1. Fetch courses if not already cached
   useEffect(() => {
     if (!myCourses || myCourses.length === 0) {
       dispatch(fetchMyCourses());
     }
-  }, [dispatch, myCourses?.length]);
+    if (!allCourses || allCourses.length === 0) {
+      dispatch(fetchAllCourses());
+    }
+  }, [dispatch, myCourses?.length, allCourses?.length]);
 
-  // 2. Select initial active course based on URL (?course=btech / ?course=bca), localStorage, or default
+  // Combined available courses: personal courses with note counts + platform catalog
+  const availableCourses = useMemo(() => {
+    const myMap = new Map((myCourses || []).map((c) => [c._id, c]));
+    const list = [...(myCourses || [])];
+    (allCourses || []).forEach((c) => {
+      if (c && c._id && !myMap.has(c._id) && c.isActive !== false) {
+        list.push(c);
+      }
+    });
+    return list;
+  }, [myCourses, allCourses]);
+
+  // 2. Select initial or updated active course based on URL (?course=...) or localStorage
   useEffect(() => {
-    if (myCourses.length > 0) {
-      let targetCourse = null;
+    if (availableCourses.length === 0) return;
 
-      // Priority 1: Match from URL parameter (?course=btech / ?course=bca / ?course=B.Tech)
-      if (courseQuery) {
-        const cleanQuery = decodeURIComponent(courseQuery).trim().toLowerCase();
-        targetCourse = myCourses.find(
-          (c) =>
-            c.slug?.toLowerCase() === cleanQuery ||
-            c.name?.toLowerCase() === cleanQuery ||
-            c.courseCode?.toLowerCase() === cleanQuery ||
-            c._id === courseQuery
-        );
+    let targetCourse = null;
+
+    // Priority 1: Match from URL parameter (?course=placement-preparation / ?course=btech)
+    if (courseQuery) {
+      targetCourse = availableCourses.find((c) => courseMatchesQuery(c, courseQuery));
+    }
+
+    // Priority 2: Match from localStorage (only if no URL query was specified)
+    if (!targetCourse && !courseQuery) {
+      const savedId = localStorage.getItem('my_study_selected_course');
+      if (savedId) {
+        targetCourse = availableCourses.find((c) => c._id === savedId);
       }
+    }
 
-      // Priority 2: Match from localStorage
-      if (!targetCourse) {
-        const savedId = localStorage.getItem('my_study_selected_course');
-        if (savedId) {
-          targetCourse = myCourses.find((c) => c._id === savedId);
-        }
-      }
+    // Priority 3: Fallback to existing selectedCourse (if valid) or first available
+    if (!targetCourse) {
+      targetCourse =
+        selectedCourse && availableCourses.some((c) => c._id === selectedCourse._id)
+          ? selectedCourse
+          : availableCourses[0];
+    }
 
-      // Priority 3: Current selectedCourse in Redux or fallback to first course
-      if (!targetCourse) {
-        targetCourse =
-          selectedCourse && myCourses.some((c) => c._id === selectedCourse._id)
-            ? selectedCourse
-            : myCourses[0];
-      }
-
-      // Update Redux state if different
+    if (targetCourse) {
       if (!selectedCourse || selectedCourse._id !== targetCourse._id) {
         dispatch(setSelectedCourse(targetCourse));
       }
 
-      // Persist to localStorage
       localStorage.setItem('my_study_selected_course', targetCourse._id);
 
-      // Sync URL query param (?course=btech or ?course=bca)
-      const currentParam = targetCourse.slug || targetCourse.name;
-      if (courseQuery !== currentParam) {
-        setSearchParams({ course: currentParam }, { replace: true });
+      // Only sync URL query param if it does not already match the target course
+      if (!courseMatchesQuery(targetCourse, courseQuery)) {
+        const expectedParam = targetCourse.slug || targetCourse.name;
+        setSearchParams({ course: expectedParam }, { replace: true });
       }
     }
-  }, [myCourses, courseQuery, selectedCourse, dispatch, setSearchParams]);
+  }, [availableCourses, courseQuery, dispatch, setSearchParams]);
 
-  // 3. When selected course is active, fetch its semesters via courseSlice thunk
+  // 3. When selected course is active, fetch its semesters if not already cached
   useEffect(() => {
     if (selectedCourse?._id) {
-      dispatch(fetchSemestersByCourse(selectedCourse._id));
+      if (!semestersByCourse?.[selectedCourse._id]) {
+        dispatch(fetchSemestersByCourse(selectedCourse._id));
+      }
     }
-  }, [selectedCourse?._id, dispatch]);
+  }, [selectedCourse?._id, semestersByCourse, dispatch]);
 
-  // 4. Batch-fetch subjects for all active semesters with Redux caching
-  useEffect(() => {
-    if (semesters.length > 0) {
-      const semesterIds = semesters.map((s) => s._id);
-      dispatch(fetchSubjectsForSemesters(semesterIds));
-    }
-  }, [semesters, dispatch]);
-
-  // Only show semesters where the logged-in student has uploaded notes (strictly noteCount > 0)
+  // 4. Batch-fetch subjects only for active semesters with notes
   const mySemesters = useMemo(() => {
     return (semesters || []).filter((sem) => (sem.noteCount || sem.myNoteCount || 0) > 0);
   }, [semesters]);
 
+  useEffect(() => {
+    if (mySemesters.length > 0) {
+      const semesterIds = mySemesters.map((s) => s._id);
+      dispatch(fetchSubjectsForSemesters(semesterIds));
+    }
+  }, [mySemesters, dispatch]);
+
   // Course switcher handler: updates Redux, localStorage, and URL query param
-  const [refreshing, setRefreshing] = React.useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await dispatch(fetchMyCourses()).unwrap();
+      await Promise.all([
+        dispatch(fetchMyCourses()).unwrap(),
+        dispatch(fetchAllCourses()).unwrap()
+      ]);
       if (selectedCourse?._id) {
         await dispatch(fetchSemestersByCourse(selectedCourse._id)).unwrap();
       }
       toast.success('Curriculum refreshed');
-    } catch (err) {
+    } catch {
       toast.error('Failed to refresh curriculum');
     } finally {
       setRefreshing(false);
@@ -136,7 +179,7 @@ export const MyStudyPage = () => {
   }, [selectedCourse?._id]);
 
   const handleCourseChange = (courseId) => {
-    const course = myCourses.find((c) => c._id === courseId);
+    const course = availableCourses.find((c) => c._id === courseId);
     if (course) {
       dispatch(setSelectedCourse(course));
       localStorage.setItem('my_study_selected_course', course._id);
@@ -145,7 +188,10 @@ export const MyStudyPage = () => {
     }
   };
 
-  if (loading && myCourses.length === 0) {
+  const isInitialLoading = loading && availableCourses.length === 0;
+  const isSemestersLoading = semestersLoading && (!semesters || semesters.length === 0);
+
+  if (isInitialLoading) {
     return (
       <div className="py-24 text-center space-y-3">
         <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)] mx-auto" />
@@ -154,31 +200,33 @@ export const MyStudyPage = () => {
     );
   }
 
+  const currentCourseParam = selectedCourse?.slug || selectedCourse?.name || '';
+
   return (
     <div className="animate-in fade-in duration-200">
       {/* Top Breadcrumb */}
       <Breadcrumb items={[{ label: 'My Study' }]} />
 
       {/* Course Switcher */}
-      {myCourses.length > 0 && (
+      {availableCourses.length > 0 && (
         <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 p-2.5 border border-transparent dark:border-slate-800 rounded-lg">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase px-2">Course:</span>
-            {myCourses.length > 1 ? (
+            {availableCourses.length > 1 ? (
               <select
                 value={selectedCourse?._id || ''}
                 onChange={(e) => handleCourseChange(e.target.value)}
                 className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
               >
-                {myCourses.map((c) => (
+                {availableCourses.map((c) => (
                   <option key={c._id} value={c._id}>
-                    {c.name}
+                    {c.name} {c.noteCount ? `(${c.noteCount} notes)` : ''}
                   </option>
                 ))}
               </select>
             ) : (
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5">
-                {selectedCourse?.name || myCourses[0]?.name}
+                {selectedCourse?.name || availableCourses[0]?.name}
               </span>
             )}
           </div>
@@ -204,14 +252,14 @@ export const MyStudyPage = () => {
           <span className="text-xs text-slate-400 dark:text-slate-500">Click a semester to open notes</span>
         </div>
 
-        {loading? (
+        {isSemestersLoading ? (
           <div className="py-20 text-center space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
-            <div className=" mx-auto" />
+            <Loader2 className="w-7 h-7 animate-spin text-[var(--primary)] mx-auto" />
             <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
               Loading your notes and semesters...
             </p>
           </div>
-        ) : myCourses.length === 0 ? (
+        ) : availableCourses.length === 0 ? (
           <div className="p-10 text-center bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 space-y-3">
             <Calendar className="w-9 h-9 text-slate-300 dark:text-slate-600 mx-auto" />
             <div className="space-y-1">
@@ -239,8 +287,7 @@ export const MyStudyPage = () => {
             </div>
             <button
               onClick={() => {
-                const courseParam = selectedCourse?.slug || selectedCourse?.name || '';
-                navigate(courseParam ? `/student/add-notes?step=2&course=${encodeURIComponent(courseParam)}` : '/student/add-notes?step=1');
+                navigate(currentCourseParam ? `/student/add-notes?step=2&course=${encodeURIComponent(currentCourseParam)}` : '/student/add-notes?step=1');
               }}
               className="px-4 py-2 text-xs font-semibold text-white bg-[var(--primary)] hover:bg-[var(--primary-hover)] rounded-xl transition-colors cursor-pointer inline-flex items-center gap-1.5"
             >
@@ -275,7 +322,13 @@ export const MyStudyPage = () => {
                       <div>
                         {/* Semester Name */}
                         <h3
-                          onClick={() => navigate(`/student/my-study/semester?semester=${semNumber}`)}
+                          onClick={() =>
+                            navigate(
+                              currentCourseParam
+                                ? `/student/my-study/semester?course=${encodeURIComponent(currentCourseParam)}&semester=${semNumber}`
+                                : `/student/my-study/semester?semester=${semNumber}`
+                            )
+                          }
                           className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-[var(--primary)] transition-colors line-clamp-1 cursor-pointer"
                           title={`View Semester ${semNumber} notes`}
                         >
@@ -343,9 +396,13 @@ export const MyStudyPage = () => {
                               <div
                                 onClick={() =>
                                   navigate(
-                                    `/student/my-study/semester?semester=${semNumber}&subject=${encodeURIComponent(
-                                      sub.name
-                                    )}`
+                                    currentCourseParam
+                                      ? `/student/my-study/semester?course=${encodeURIComponent(currentCourseParam)}&semester=${semNumber}&subject=${encodeURIComponent(
+                                          sub.name
+                                        )}`
+                                      : `/student/my-study/semester?semester=${semNumber}&subject=${encodeURIComponent(
+                                          sub.name
+                                        )}`
                                   )
                                 }
                                 className="flex items-center gap-1.5 truncate cursor-pointer hover:underline flex-1"

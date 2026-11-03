@@ -2,6 +2,8 @@ const Note = require('../models/Note');
 const SavedNote = require('../models/SavedNote');
 const NoteEnrollment = require('../models/NoteEnrollment');
 const User = require('../models/User');
+const Course = require('../models/Course');
+const Semester = require('../models/Semester');
 
 const getStudentDashboardStats = async (req, res) => {
   try {
@@ -140,6 +142,80 @@ const getStudentDashboardStats = async (req, res) => {
     });
   }
 };
+const getAdminDashboardStats = async (req, res) => {
+  try {
+    const [
+      totalStudents,
+      activeStudents,
+      verifiedStudents,
+      totalCourses,
+      totalSemesters,
+      totalNotes,
+      publicNotes,
+      privateNotes,
+      notesViewsAgg,
+      recentStudents,
+      recentNotes
+    ] = await Promise.all([
+      User.countDocuments({ role: 'STUDENT' }),
+      User.countDocuments({ role: 'STUDENT', isActive: true }),
+      User.countDocuments({ role: 'STUDENT', isVerified: true }),
+      Course.countDocuments({ isActive: true }),
+      Semester.countDocuments({ isActive: true }),
+      Note.countDocuments({ status: { $ne: 'ARCHIVED' } }),
+      Note.countDocuments({ status: { $ne: 'ARCHIVED' }, visibility: 'PUBLIC' }),
+      Note.countDocuments({ status: { $ne: 'ARCHIVED' }, visibility: 'PRIVATE' }),
+      Note.aggregate([
+        { $match: { status: { $ne: 'ARCHIVED' } } },
+        { $group: { _id: null, totalViews: { $sum: '$views' }, totalDownloads: { $sum: '$downloads' } } }
+      ]),
+      User.find({ role: 'STUDENT' })
+        .select('name email academicProfile isActive isVerified createdAt lastLogin')
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .lean(),
+      Note.find({ status: { $ne: 'ARCHIVED' } })
+        .populate('course', 'name slug courseCode')
+        .populate('semester', 'name semesterNumber')
+        .populate('subject', 'name slug subjectCode')
+        .populate('owner', 'name email')
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .lean()
+    ]);
+
+    const totalViews = (notesViewsAgg && notesViewsAgg[0]?.totalViews) || 0;
+    const totalDownloads = (notesViewsAgg && notesViewsAgg[0]?.totalDownloads) || 0;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        stats: {
+          totalStudents,
+          activeStudents,
+          verifiedStudents,
+          totalCourses,
+          totalSemesters,
+          totalNotes,
+          publicNotes,
+          privateNotes,
+          totalViews,
+          totalDownloads
+        },
+        recentStudents: recentStudents || [],
+        recentNotes: recentNotes || []
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching admin dashboard stats:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch admin stats'
+    });
+  }
+};
+
 module.exports = {
-  getStudentDashboardStats
+  getStudentDashboardStats,
+  getAdminDashboardStats
 };

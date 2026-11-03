@@ -30,6 +30,36 @@ export const DashboardPage = () => {
     }
   };
 
+  // Redirect to the exact note in My Study curriculum notes
+  const handleOpenRecentNote = (note) => {
+    if (!note) return;
+
+    const courseParam = note.course?.slug || note.course?.name || '';
+    const semParam =
+      note.semester?.semesterNumber ||
+      note.semester?.name ||
+      note.semester?._id ||
+      1;
+    const subjParam =
+      typeof note.subject === 'object' ? note.subject?.name || '' : (note.subject || '');
+
+    let targetUrl = `/student/my-study/semester?semester=${encodeURIComponent(semParam)}`;
+    if (courseParam) {
+      targetUrl += `&course=${encodeURIComponent(courseParam)}`;
+    }
+    if (subjParam) {
+      targetUrl += `&subject=${encodeURIComponent(subjParam)}`;
+    }
+
+    navigate(targetUrl, {
+      state: {
+        note,
+        noteId: note._id || note.id,
+        openPdf: true
+      }
+    });
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Header bar with Refresh Button */}
@@ -66,7 +96,7 @@ export const DashboardPage = () => {
                 </p>
               </div>
               <button
-                onClick={() => navigate('/student/my-notes')}
+                onClick={() => navigate('/student/my-study')}
                 className="text-xs font-semibold text-primary dark:text-yellow-300 hover:underline cursor-pointer flex items-center gap-1"
               >
                 <span>View all notes</span>
@@ -109,6 +139,7 @@ export const DashboardPage = () => {
                       owner: note.owner?.name || user?.name || 'Student',
                       uploadedAt: note.createdAt,
                     }}
+                    onOpen={() => handleOpenRecentNote(note)}
                   />
                 ))}
               </div>

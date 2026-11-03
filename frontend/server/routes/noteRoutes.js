@@ -6,6 +6,7 @@ const {
   createNote,
   getMyNotes,
   getPublicNotes,
+  getAllNotesAdmin,
   getNoteById,
   updateNote,
   deleteNote,
@@ -20,7 +21,8 @@ const {
 
 const {
   authenticate,
-  optionalAuthenticate
+  optionalAuthenticate,
+  authorizeRoles
 } = require('../middleware/authMiddleware');
 
 const { upload } = require('../utils/upload');
@@ -34,6 +36,7 @@ router.post('/', authenticate, upload.single('file'), createNote);
 // Specific collections before :id to prevent route shadowing
 router.get('/my', authenticate, getMyNotes);
 router.get('/public', optionalAuthenticate, getPublicNotes);
+router.get('/admin/all', authenticate, authorizeRoles('ADMIN'), getAllNotesAdmin);
 router.get('/enrolled/my', authenticate, getMyEnrolledNotes);
 
 // Specific note operations by ID

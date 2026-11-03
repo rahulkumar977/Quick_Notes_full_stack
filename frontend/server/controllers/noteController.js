@@ -1227,11 +1227,60 @@ const updateNoteProgress = async (req, res) => {
   }
 };
 
+const getAllNotesAdmin = async (req, res) => {
+  try {
+    const { search, q, visibility, status, course } = req.query;
+    const filter = {
+      status: { $ne: 'ARCHIVED' }
+    };
+
+    if (visibility) {
+      filter.visibility = visibility.toUpperCase();
+    }
+    if (status) {
+      filter.status = status.toUpperCase();
+    }
+    if (course) {
+      filter.course = course;
+    }
+
+    const searchTerm = search || q;
+    if (searchTerm && searchTerm.trim()) {
+      const sanitized = searchTerm.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.$or = [
+        { title: { $regex: sanitized, $options: 'i' } },
+        { description: { $regex: sanitized, $options: 'i' } }
+      ];
+    }
+
+    const notes = await Note.find(filter)
+      .populate('course', 'name slug courseCode')
+      .populate('semester', 'name semesterNumber')
+      .populate('subject', 'name slug subjectCode')
+      .populate('owner', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      count: notes.length,
+      data: notes
+    });
+  } catch (error) {
+    console.error('Error fetching admin notes:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch notes'
+    });
+  }
+};
+
 module.exports = {
   uploadFile,
   createNote,
   getMyNotes,
   getPublicNotes,
+  getAllNotesAdmin,
   getNoteById,
   updateNote,
   deleteNote,

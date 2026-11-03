@@ -14,10 +14,12 @@ const {
   changePassword,
   refreshAccessToken,
   getMe,
-  updateProfile
+  updateProfile,
+  getAllUsersAdmin,
+  updateUserStatusAdmin
 } = require('../controllers/authController');
 
-const { authenticate } = require('../middleware/authMiddleware');
+const { authenticate, authorizeRoles } = require('../middleware/authMiddleware');
 
 // ==========================================
 // PUBLIC AUTHENTICATION ROUTES
@@ -49,5 +51,11 @@ router.put('/profile', authenticate, updateProfile);
 // In-Session Password Change (Requires Login)
 router.post('/send-change-password-otp', authenticate, sendChangePasswordOTP);
 router.post('/change-password', authenticate, changePassword);
+
+// ==========================================
+// ADMIN USER MANAGEMENT ROUTES
+// ==========================================
+router.get('/users', authenticate, authorizeRoles('ADMIN'), getAllUsersAdmin);
+router.patch('/users/:id/status', authenticate, authorizeRoles('ADMIN'), updateUserStatusAdmin);
 
 module.exports = router;

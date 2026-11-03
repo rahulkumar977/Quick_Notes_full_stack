@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   GraduationCap,
   FolderOpen,
+  Briefcase,
   Bookmark,
   BookMarked,
   Compass,
@@ -133,6 +134,7 @@ export const StudentLayout = ({ children }) => {
 
   const exploreNavItems = [
     { id: '/student/explore', label: 'Explore Notes', icon: Compass },
+    { id: '/student/placement-notes', label: 'Placement Notes', icon: Briefcase },
   ];
 
  

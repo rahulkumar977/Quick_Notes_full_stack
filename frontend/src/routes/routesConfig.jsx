@@ -22,6 +22,7 @@ import { CourseDetailsPage } from '../pages/public/CourseDetailsPage';
 import { DashboardPage } from '../pages/student/DashboardPage';
 import { MyStudyPage } from '../pages/student/myStudyNote/MyStudyPage';
 import { SemesterPage } from '../pages/student/myStudyNote/SemesterPage';
+import { PlacementNotes } from '../pages/student/placmentNotes/PlacementNotes';
 import { SavedNotesPage } from '../pages/student/savedNotes/SavedNotesPage';
 import { EnrolledCoursesPage } from '../pages/student/EnrolledCoursesPage';
 import { SettingsPage } from '../pages/student/settings/SettingsPage';
@@ -139,6 +140,17 @@ export const routesConfig = [
     name: 'Semester Notes',
   },
   {
+    path: '/student/placement-notes',
+    element: (
+      <StudentLayout>
+        <PlacementNotes />
+      </StudentLayout>
+    ),
+    isPrivate: true,
+    allowedRoles: ['STUDENT'],
+    name: 'Placement Notes',
+  },
+  {
     path: '/student/saved-notes',
     element: (
       <StudentLayout>
@@ -234,6 +246,17 @@ export const routesConfig = [
     isPrivate: true,
     allowedRoles: ['ADMIN'],
     name: 'Admin Users',
+  },
+  {
+    path: '/admin/students',
+    element: (
+      <AdminLayout>
+        <AdminUsersPage />
+      </AdminLayout>
+    ),
+    isPrivate: true,
+    allowedRoles: ['ADMIN'],
+    name: 'Student Record',
   },
   {
     path: '/admin/courses',
