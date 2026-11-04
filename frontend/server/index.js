@@ -17,8 +17,9 @@ const meetingRoutes = require('./routes/meetingRoutes');
 const initializeMeetingSocket = require('./socket/meetingSocket');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
-const allowOrigin = ['http://localhost:5173', 'https://qknotes.netlify.app']
+const allowOrigin = ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://qknotes.netlify.app', process.env.CLIENT_URL].filter(Boolean)
 const io = new Server(server, {
   cors: {
     origin: allowOrigin,

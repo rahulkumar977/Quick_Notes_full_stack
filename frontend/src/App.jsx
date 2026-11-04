@@ -42,7 +42,9 @@ function AppContent() {
             }
           }
         } catch (refreshErr) {
-          console.error('Session refresh failed:', refreshErr);
+          if (import.meta.env.DEV) {
+            console.debug('No active session found:', refreshErr?.message || refreshErr);
+          }
         }
       }
 

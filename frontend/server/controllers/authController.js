@@ -12,7 +12,7 @@ const User = require('../models/User');
 const getCookieOptions = (maxAgeMs) => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   maxAge: maxAgeMs
 });
 
@@ -245,9 +245,7 @@ const login = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
-    console.log(process.env.ACCESS_TOKEN_SECRET)
-    console.log(process.env.REFRESH_TOKEN_SECRET)
-    console.log(user._id, user.role)
+    
 
     // Generate JWT access & refresh tokens
     const accessToken = jsonwebtokenId(
@@ -295,7 +293,7 @@ const login = async (req, res) => {
  
 const logout = async (req, res) => {
   try {
-    const incomingRefreshToken = req.cookies?.refreshToken;
+    const incomingRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
     if (incomingRefreshToken) {
       try {
@@ -313,7 +311,7 @@ const logout = async (req, res) => {
     const clearOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
     };
 
     res.clearCookie('accessToken', clearOptions);
@@ -563,7 +561,7 @@ const changePassword = async (req, res) => {
     const clearOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
     };
     res.clearCookie('accessToken', clearOptions);
     res.clearCookie('refreshToken', clearOptions);
@@ -579,7 +577,7 @@ const changePassword = async (req, res) => {
 
 const refreshAccessToken = async (req, res) => {
   try {
-    const incomingRefreshToken = req.cookies?.refreshToken;
+    const incomingRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
     if (!incomingRefreshToken) {
       return res.status(401).json({ success: false, message: 'Refresh token is required' });

@@ -47,7 +47,7 @@ export const LandingPage = () => {
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           
           {/* Creative Animated Top Badge */}
-          <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-primary/30 bg-primary-light/80 dark:bg-primary-dark/30 backdrop-blur-md text-xs font-semibold text-primary-dark dark:text-yellow-300 shadow-xs mb-8 hover:scale-105 transition-all cursor-pointer"
+          <div className="hidden sm:inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-primary/30 bg-primary-light/80 dark:bg-primary-dark/30 backdrop-blur-md text-xs font-semibold text-primary-dark dark:text-yellow-300 shadow-xs mb-8 hover:scale-105 transition-all cursor-pointer"
                onClick={() => navigate('/explore')}>
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -58,7 +58,7 @@ export const LandingPage = () => {
           </div>
 
           {/* Main Hero Headings */}
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.12] max-w-4xl mx-auto">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.12] max-w-4xl mx-auto">
             Supercharge Your Studies with{' '}
             <span className="relative inline-block">
               <span className="bg-gradient-to-r from-amber-600 via-[var(--primary)] to-yellow-500 dark:from-yellow-300 dark:via-yellow-400 dark:to-amber-200 bg-clip-text text-transparent">
@@ -68,10 +68,6 @@ export const LandingPage = () => {
             </span>{' '}
             in One Place.
           </h1>
-
-          <p className="mt-6 text-lg sm:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            From lecture PDFs and handwritten summaries to verified semester question papers — discover notes structured exactly by your university curriculum.
-          </p>
 
           {/* Hero CTAs */}
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -162,10 +158,7 @@ export const LandingPage = () => {
                     <div className="w-3 h-3 rounded-full bg-amber-400/90" />
                     <div className="w-3 h-3 rounded-full bg-emerald-400/90" />
                   </div>
-                  <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                    <Lock className="w-3 h-3 text-emerald-500" />
-                    <span>niu-notes.edu/btech/cse/semester-1</span>
-                  </div>
+                  
                 </div>
 
                 {/* Interactive Demo Tab Switcher */}
@@ -179,7 +172,7 @@ export const LandingPage = () => {
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    📄 Live Notes
+                    Live Notes
                   </button>
                   <button
                     type="button"
@@ -190,7 +183,7 @@ export const LandingPage = () => {
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    🗺️ Roadmap
+                    Roadmap
                   </button>
                   <button
                     type="button"
@@ -201,7 +194,7 @@ export const LandingPage = () => {
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    📝 Solved Papers
+                    Solved Papers
                   </button>
                 </div>
               </div>
@@ -264,14 +257,9 @@ export const LandingPage = () => {
                             PDF • 12 pages
                           </span>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-                          Covers operator precedence, bitwise logic, short-circuit evaluation, conditional statements, and past exam questions.
-                        </p>
+                         
                         <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 dark:text-slate-500">
-                          <span className="flex items-center gap-1.5">
-                            <GraduationCap className="w-3.5 h-3.5 text-slate-400" />
-                            Uploaded by Rahul Kumar (Topper)
-                          </span>
+                        
                           <button
                             type="button"
                             onClick={() => navigate('/explore')}
@@ -292,9 +280,7 @@ export const LandingPage = () => {
                             PYQ • 6 pages
                           </span>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-                          Repeated 10-mark questions from 2021 to 2025 university examinations with clean code illustrations.
-                        </p>
+                        
                         <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 dark:text-slate-500">
                           <span className="flex items-center gap-1.5">
                             <Download className="w-3 h-3 text-slate-400" />
