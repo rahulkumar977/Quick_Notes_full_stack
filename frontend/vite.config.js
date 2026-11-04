@@ -5,15 +5,16 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  base:'/',
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'https://quick-notes-w463.onrender.com',
         changeOrigin: true,
         secure: false
       },
       '/socket.io': {
-        target: 'http://localhost:3000',
+        target: 'https://quick-notes-w463.onrender.com',
         ws: true,
         changeOrigin: true
       }
