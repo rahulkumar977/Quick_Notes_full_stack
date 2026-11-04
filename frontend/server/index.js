@@ -18,17 +18,17 @@ const initializeMeetingSocket = require('./socket/meetingSocket');
 
 const app = express();
 const server = http.createServer(app);
-
+const allowOrigin = ['http://localhost:5173', 'https://qknotes.netlify.app']
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:5173', 'https://quick-notes-w463.onrender.com'],
+    origin: allowOrigin,
     credentials: true
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.use(cors({
-  origin: ['http://localhost:5173','https://quick-notes-w463.onrender.com'], 
+  origin:allowOrigin,
   credentials: true
 })); 
 app.use(express.json());  
