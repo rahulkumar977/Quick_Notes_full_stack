@@ -73,8 +73,8 @@ export const LoginPage = () => {
   };
 
   return (
-    <GridBackground isFullPage showGlow={true} mask="radial" className="flex items-center justify-center p-4">
-      <div className="w-[100%] md:min-w-lg bg-white/95 dark:bg-[#0d0e13]/95 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 p-8 space-y-6 shadow-2xl transition-all">
+    <GridBackground isFullPage showGlow={true} mask="radial" className="flex items-center justify-center">
+      <div className="md:min-w-lg w-full bg-white/95 dark:bg-[#0d0e13]/95 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 p-8 space-y-6 shadow-2xl h-screen sm:h-auto transition-all md:my-4">
         {/* Brand Header */}
         <div className="text-center space-y-1">
           <div className="inline-block mb-1">

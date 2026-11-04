@@ -38,9 +38,11 @@ export const AdminLayout = ({ children }) => {
   const handleLogout = async () => {
     try {
       await authApi.logout();
+    } catch (err) {
+      console.error('Logout error:', err);
     } finally {
       dispatch(logoutAction());
-      navigate('/login');
+      window.location.replace('/');
     }
   };
 
