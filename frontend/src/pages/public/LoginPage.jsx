@@ -72,9 +72,15 @@ export const LoginPage = () => {
     }
   };
 
+  const handleDemo = () => {
+    setFormData({
+      email: 'developerrahul977@gmail.com',
+      password: '1@Rahul1@'
+    });
+  };
   return (
     <GridBackground isFullPage showGlow={true} mask="radial" className="flex items-center justify-center">
-      <div className="md:min-w-lg w-full bg-white/95 dark:bg-[#0d0e13]/95 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 p-8 space-y-6 shadow-2xl h-screen sm:h-auto transition-all md:my-4">
+      <div className="md:min-w-lg relative w-full bg-white/95 dark:bg-[#0d0e13]/95 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 p-8 space-y-6 shadow-2xl h-screen sm:h-auto transition-all md:my-4">
         {/* Brand Header */}
         <div className="text-center space-y-1">
           <div className="inline-block mb-1">
@@ -82,6 +88,9 @@ export const LoginPage = () => {
           </div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Welcome back</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">Sign in to your student account to continue</p>
+        </div>
+        <div className="text-slate-700 dark:text-slate-300 absolute top-5 right-5 border-2 border-[var(--primary)] p-2 px-4 bg-[var(--primary)] rounded-md w-fit cursor-pointer block text-sm">
+          <button onClick={handleDemo} className="text-white">Demo Panel</button>
         </div>
 
         {/* Login Form */}

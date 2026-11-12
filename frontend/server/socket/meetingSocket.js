@@ -16,7 +16,6 @@ const parseCookies = (cookieHeader) => {
   return cookies;
 };
 
-// In-memory room participants tracker:
 // roomId -> Map(socketId -> { socketId, userId, name, isAudioMuted, isVideoOff, isScreenSharing, isHandRaised })
 const roomParticipants = new Map();
 
